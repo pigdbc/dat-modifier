@@ -9,7 +9,7 @@ DATファイル内の電話番号フィールドを一括修正するツール�
 ## 📁 文件结构 / File Structure
 
 ```
-dat-modifier/
+3-dat-modifier/
 ├── in/                          ← 输入文件夹 (放置原始DAT文件)
 ├── out/                         ← 输出文件夹 (自动生成)
 ├── log/                         ← 日志文件夹 (自动生成)
