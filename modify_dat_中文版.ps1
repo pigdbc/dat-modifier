@@ -13,34 +13,71 @@ $OutFolder = "out"
 $LogFolder = "log"
 
 # ==================== 记录配置 ====================
+# ==================== 配置文件加载 ====================
+$ConfigFile = "config.ini"
+if (-not (Test-Path $ConfigFile)) { $ConfigFile = "config_日本語.ini" }
+
+function Parse-IniFile {
+    param([string]$FilePath)
+    $ini = @{}
+    $section = "Global"
+    if (-not (Test-Path $FilePath)) { return $ini }
+    
+    Get-Content $FilePath -Encoding UTF8 | ForEach-Object {
+        $line = $_.Trim()
+        if ([string]::IsNullOrWhiteSpace($line) -or $line.StartsWith(";") -or $line.StartsWith("#")) { return }
+        if ($line -match "^\[(.*)\]$") {
+            $section = $matches[1]
+            $ini[$section] = @{}
+        } elseif ($line -match "^(.*?)=(.*)$") {
+            $key = $matches[1].Trim()
+            $value = $matches[2].Trim()
+            if (-not $ini.ContainsKey($section)) { $ini[$section] = @{} }
+            $ini[$section][$key] = $value
+        }
+    }
+    return $ini
+}
+
+$ConfigData = Parse-IniFile -FilePath $ConfigFile
+
+# ==================== 记录配置 ====================
+# 默认值
 $RecordSize   = 1300
-$HeaderMarker = 0x31      # ASCII '1'
-$DataMarker   = 0x32      # ASCII '2'
-# BigEndianUnicode '0' = 0x00 0x30
+$HeaderMarker = 0x31
+$DataMarker   = 0x32
 $ZeroChar     = "0"
 
-# ==================== 修改规则配置 ====================
-$ModifyRules = @(
-    @{
-        Name             = "Phone-1"
-        StartByte        = 100
-        PhoneLength      = 10
-        OldLeadingZeros  = 0
-        OldTrailingZeros = 10
-        NewLeadingZeros  = 6
-        NewTrailingZeros = 4
-    },
-    @{
-        Name             = "Phone-2"
-        StartByte        = 200
-        PhoneLength      = 10
-        OldLeadingZeros  = 0
-        OldTrailingZeros = 10
-        NewLeadingZeros  = 6
-        NewTrailingZeros = 4
+# 从INI加载设置
+if ($ConfigData.ContainsKey("Settings")) {
+    if ($ConfigData["Settings"]["RecordSize"]) { $RecordSize = [int]$ConfigData["Settings"]["RecordSize"] }
+    if ($ConfigData["Settings"]["HeaderMarker"]) { $HeaderMarker = [int]$ConfigData["Settings"]["HeaderMarker"] + 0x30 }
+    if ($ConfigData["Settings"]["DataMarker"]) { $DataMarker = [int]$ConfigData["Settings"]["DataMarker"] + 0x30 }
+}
+
+# ==================== 修改规则配置 (从INI加载) ====================
+$ModifyRules = @()
+foreach ($key in $ConfigData.Keys) {
+    if ($key -like "Rule-*") {
+        $ModifyRules += @{
+            Name             = $ConfigData[$key]["Name"]
+            StartByte        = [int]$ConfigData[$key]["StartByte"]
+            PhoneLength      = [int]$ConfigData[$key]["PhoneLength"]
+            OldLeadingZeros  = [int]$ConfigData[$key]["OldLeadingZeros"]
+            OldTrailingZeros = [int]$ConfigData[$key]["OldTrailingZeros"]
+            NewLeadingZeros  = [int]$ConfigData[$key]["NewLeadingZeros"]
+            NewTrailingZeros = [int]$ConfigData[$key]["NewTrailingZeros"]
+        }
     }
-    # 添加更多规则...
-)
+}
+
+if ($ModifyRules.Count -eq 0) {
+    # 默认值
+    $ModifyRules = @(
+        @{ Name="Phone-1"; StartByte=100; PhoneLength=10; OldLeadingZeros=0; OldTrailingZeros=10; NewLeadingZeros=6; NewTrailingZeros=4 },
+        @{ Name="Phone-2"; StartByte=200; PhoneLength=10; OldLeadingZeros=0; OldTrailingZeros=10; NewLeadingZeros=6; NewTrailingZeros=4 }
+    )
+}
 
 # ==================== 脚本逻辑 ====================
 $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
