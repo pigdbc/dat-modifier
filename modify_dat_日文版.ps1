@@ -1,6 +1,7 @@
 # ============================================
-# DATファイル マルチフィールド修正スクリプト (FileStream版)
+# DATファイル マルチフィールド修正スクリプト (BigEndianUnicode版)
 # 機能：複数フィールド修正 | in/outフォルダ | ログ記録 | ストリーム読み書き
+# 対応：UTF-16BE (BigEndianUnicode) エンコード
 # ============================================
 
 param(
@@ -16,7 +17,7 @@ $LogFolder = "log"
 $RecordSize   = 1300
 $HeaderMarker = 0x31      # ASCII '1'
 $DataMarker   = 0x32      # ASCII '2'
-$ZeroByte     = 0x30      # ASCII '0'
+$ZeroChar     = '0'       # ゼロ文字（BigEndianUnicodeで使用）
 
 # ==================== 修正ルール設定 ====================
 $ModifyRules = @(
@@ -116,7 +117,9 @@ try {
                 
                 # フィールド全体を読み込む
                 $totalLen = $rule.OldLeadingZeros + $rule.PhoneLength + $rule.OldTrailingZeros
-                $oldField = [System.Text.Encoding]::ASCII.GetString($recordBuffer, $fieldOffset, $totalLen)
+                $fieldBytes = New-Object byte[] ($totalLen * 2)
+                [Array]::Copy($recordBuffer, $fieldOffset, $fieldBytes, 0, $totalLen * 2)
+                $oldField = [System.Text.Encoding]::BigEndianUnicode.GetString($fieldBytes)
                 
                 # 新フォーマットかどうかチェック
                 $expectedLeading = "0" * $rule.NewLeadingZeros
@@ -133,25 +136,27 @@ try {
                     $changes += "  $($rule.Name): 変更なし"
                 } else {
                     # 旧フォーマットから電話番号を抽出
-                    $phoneOffset = $fieldOffset + $rule.OldLeadingZeros
-                    $phone = New-Object byte[] $rule.PhoneLength
-                    [Array]::Copy($recordBuffer, $phoneOffset, $phone, 0, $rule.PhoneLength)
+                    $phoneOffset = $fieldOffset + $rule.OldLeadingZeros * 2
+                    $phone = New-Object byte[] ($rule.PhoneLength * 2)
+                    [Array]::Copy($recordBuffer, $phoneOffset, $phone, 0, $rule.PhoneLength * 2)
                     
                     # 新フィールドを構築してrecordBufferに書き込む
                     $newLen = $rule.NewLeadingZeros + $rule.PhoneLength + $rule.NewTrailingZeros
                     
-                    # 先頭0を埋める
-                    for ($j = 0; $j -lt $rule.NewLeadingZeros; $j++) { 
-                        $recordBuffer[$fieldOffset + $j] = $ZeroByte 
-                    }
-                    # 電話番号をコピー
-                    [Array]::Copy($phone, 0, $recordBuffer, $fieldOffset + $rule.NewLeadingZeros, $rule.PhoneLength)
-                    # 末尾0を埋める
-                    for ($j = 0; $j -lt $rule.NewTrailingZeros; $j++) { 
-                        $recordBuffer[$fieldOffset + $rule.NewLeadingZeros + $rule.PhoneLength + $j] = $ZeroByte 
-                    }
+                    # 先頭0を埋める (BigEndianUnicode)
+                    $leadingZeros = [System.Text.Encoding]::BigEndianUnicode.GetBytes($ZeroChar * $rule.NewLeadingZeros)
+                    [Array]::Copy($leadingZeros, 0, $recordBuffer, $fieldOffset, $rule.NewLeadingZeros * 2)
                     
-                    $newFieldStr = [System.Text.Encoding]::ASCII.GetString($recordBuffer, $fieldOffset, $newLen)
+                    # 電話番号をコピー
+                    [Array]::Copy($phone, 0, $recordBuffer, $fieldOffset + $rule.NewLeadingZeros * 2, $rule.PhoneLength * 2)
+                    
+                    # 末尾0を埋める (BigEndianUnicode)
+                    $trailingZeros = [System.Text.Encoding]::BigEndianUnicode.GetBytes($ZeroChar * $rule.NewTrailingZeros)
+                    [Array]::Copy($trailingZeros, 0, $recordBuffer, $fieldOffset + ($rule.NewLeadingZeros + $rule.PhoneLength) * 2, $rule.NewTrailingZeros * 2)
+                    
+                    $newFieldBytes = New-Object byte[] ($newLen * 2)
+                    [Array]::Copy($recordBuffer, $fieldOffset, $newFieldBytes, 0, $newLen * 2)
+                    $newFieldStr = [System.Text.Encoding]::BigEndianUnicode.GetString($newFieldBytes)
                     $changes += "  $($rule.Name): [$oldField] → [$newFieldStr]"
                     $hasChange = $true
                 }

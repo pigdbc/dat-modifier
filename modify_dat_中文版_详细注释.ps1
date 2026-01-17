@@ -1,5 +1,5 @@
 # ============================================
-# DAT文件多字段修改脚本 (中文版 - 详细注释版)
+# DAT文件多字段修改脚本 (中文版 - 详细注释版 - BigEndianUnicode)
 # 功能说明：
 #   1. 从in文件夹读取DAT文件
 #   2. 逐条记录处理，修改指定位置的电话号码格式
@@ -24,7 +24,7 @@ $LogFolder = "log"  # 日志文件夹：存放处理日志
 $RecordSize   = 1300     # 每条记录的固定字节数（大端存储）
 $HeaderMarker = 0x31     # Header记录的首字节标识符（ASCII字符'1'的十六进制值）
 $DataMarker   = 0x32     # 数据记录的首字节标识符（ASCII字符'2'的十六进制值）
-$ZeroByte     = 0x30     # 用于填充的0字符（ASCII字符'0'的十六进制值）
+$ZeroChar     = '0'      # 用于填充的0字符（BigEndianUnicode编码使用字符串）
 
 # ==================== 修改规则配置 ====================
 # 每条规则定义了一个需要修改的电话号码字段
@@ -177,8 +177,11 @@ try {
                 # 计算字段总长度（前置0 + 电话号码 + 后置0）
                 $totalLen = $rule.OldLeadingZeros + $rule.PhoneLength + $rule.OldTrailingZeros
                 
-                # 从缓冲区读取原始字段内容，转换为ASCII字符串
-                $oldField = [System.Text.Encoding]::ASCII.GetString($recordBuffer, $fieldOffset, $totalLen)
+                # 从缓冲区读取原始字段内容，转换为BigEndianUnicode字符串
+                # BigEndianUnicode每个字符占2字节，所以读取长度要乘以2
+                $fieldBytes = New-Object byte[] ($totalLen * 2)
+                [Array]::Copy($recordBuffer, $fieldOffset, $fieldBytes, 0, $totalLen * 2)
+                $oldField = [System.Text.Encoding]::BigEndianUnicode.GetString($fieldBytes)
                 
                 # ========== 检查是否已经是新格式 ==========
                 # 新格式特征：以指定数量的0开头，以指定数量的0结尾
@@ -199,36 +202,36 @@ try {
                 } else {
                     # ========== 执行格式转换 ==========
                     
-                    # 计算电话号码在字段中的起始位置
-                    $phoneOffset = $fieldOffset + $rule.OldLeadingZeros
+                    # 计算电话号码在字段中的起始位置（BigEndianUnicode每字符2字节）
+                    $phoneOffset = $fieldOffset + $rule.OldLeadingZeros * 2
                     
-                    # 创建字节数组存储提取的电话号码
-                    $phone = New-Object byte[] $rule.PhoneLength
+                    # 创建字节数组存储提取的电话号码（长度*2因为BigEndianUnicode）
+                    $phone = New-Object byte[] ($rule.PhoneLength * 2)
                     
                     # 从recordBuffer复制电话号码到phone数组
                     # 参数：源数组, 源起始索引, 目标数组, 目标起始索引, 复制长度
-                    [Array]::Copy($recordBuffer, $phoneOffset, $phone, 0, $rule.PhoneLength)
+                    [Array]::Copy($recordBuffer, $phoneOffset, $phone, 0, $rule.PhoneLength * 2)
                     
                     # 计算新字段的总长度
                     $newLen = $rule.NewLeadingZeros + $rule.PhoneLength + $rule.NewTrailingZeros
                     
                     # ===== 直接在recordBuffer中构建新字段 =====
                     
-                    # 步骤1：填充前置0
-                    for ($j = 0; $j -lt $rule.NewLeadingZeros; $j++) { 
-                        $recordBuffer[$fieldOffset + $j] = $ZeroByte  # 0x30 = ASCII '0'
-                    }
+                    # 步骤1：填充前置0（使用BigEndianUnicode编码）
+                    $leadingZeros = [System.Text.Encoding]::BigEndianUnicode.GetBytes($ZeroChar * $rule.NewLeadingZeros)
+                    [Array]::Copy($leadingZeros, 0, $recordBuffer, $fieldOffset, $rule.NewLeadingZeros * 2)
                     
-                    # 步骤2：复制电话号码到新位置
-                    [Array]::Copy($phone, 0, $recordBuffer, $fieldOffset + $rule.NewLeadingZeros, $rule.PhoneLength)
+                    # 步骤2：复制电话号码到新位置（偏移量按字节计算）
+                    [Array]::Copy($phone, 0, $recordBuffer, $fieldOffset + $rule.NewLeadingZeros * 2, $rule.PhoneLength * 2)
                     
-                    # 步骤3：填充后置0
-                    for ($j = 0; $j -lt $rule.NewTrailingZeros; $j++) { 
-                        $recordBuffer[$fieldOffset + $rule.NewLeadingZeros + $rule.PhoneLength + $j] = $ZeroByte 
-                    }
+                    # 步骤3：填充后置0（使用BigEndianUnicode编码）
+                    $trailingZeros = [System.Text.Encoding]::BigEndianUnicode.GetBytes($ZeroChar * $rule.NewTrailingZeros)
+                    [Array]::Copy($trailingZeros, 0, $recordBuffer, $fieldOffset + ($rule.NewLeadingZeros + $rule.PhoneLength) * 2, $rule.NewTrailingZeros * 2)
                     
                     # 读取修改后的字段内容（用于日志显示）
-                    $newFieldStr = [System.Text.Encoding]::ASCII.GetString($recordBuffer, $fieldOffset, $newLen)
+                    $newFieldBytes = New-Object byte[] ($newLen * 2)
+                    [Array]::Copy($recordBuffer, $fieldOffset, $newFieldBytes, 0, $newLen * 2)
+                    $newFieldStr = [System.Text.Encoding]::BigEndianUnicode.GetString($newFieldBytes)
                     
                     # 记录修改详情
                     $changes += "  $($rule.Name): [$oldField] → [$newFieldStr]"
