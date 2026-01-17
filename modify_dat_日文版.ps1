@@ -14,33 +14,71 @@ $OutFolder = "out"
 $LogFolder = "log"
 
 # ==================== レコード設定 ====================
-$RecordSize   = 1300
-$HeaderMarker = 0x31      # ASCII '1'
-$DataMarker   = 0x32      # ASCII '2'
-$ZeroChar     = '0'       # ゼロ文字（BigEndianUnicodeで使用）
+# ==================== 設定ファイル読込 ====================
+$ConfigFile = "config.ini"
+if (-not (Test-Path $ConfigFile)) { $ConfigFile = "config_日本語.ini" }
 
-# ==================== 修正ルール設定 ====================
-$ModifyRules = @(
-    @{
-        Name             = "Phone-1"
-        StartByte        = 100
-        PhoneLength      = 10
-        OldLeadingZeros  = 0
-        OldTrailingZeros = 10
-        NewLeadingZeros  = 6
-        NewTrailingZeros = 4
-    },
-    @{
-        Name             = "Phone-2"
-        StartByte        = 200
-        PhoneLength      = 10
-        OldLeadingZeros  = 0
-        OldTrailingZeros = 10
-        NewLeadingZeros  = 6
-        NewTrailingZeros = 4
+function Parse-IniFile {
+    param([string]$FilePath)
+    $ini = @{}
+    $section = "Global"
+    if (-not (Test-Path $FilePath)) { return $ini }
+    
+    Get-Content $FilePath -Encoding UTF8 | ForEach-Object {
+        $line = $_.Trim()
+        if ([string]::IsNullOrWhiteSpace($line) -or $line.StartsWith(";") -or $line.StartsWith("#")) { return }
+        if ($line -match "^\[(.*)\]$") {
+            $section = $matches[1]
+            $ini[$section] = @{}
+        } elseif ($line -match "^(.*?)=(.*)$") {
+            $key = $matches[1].Trim()
+            $value = $matches[2].Trim()
+            if (-not $ini.ContainsKey($section)) { $ini[$section] = @{} }
+            $ini[$section][$key] = $value
+        }
     }
-    # ルールを追加...
-)
+    return $ini
+}
+
+$ConfigData = Parse-IniFile -FilePath $ConfigFile
+
+# ==================== レコード設定 ====================
+# デフォルト値
+$RecordSize   = 1300
+$HeaderMarker = 0x31
+$DataMarker   = 0x32
+$ZeroChar     = "0"
+
+# INIから設定を読込
+if ($ConfigData.ContainsKey("Settings")) {
+    if ($ConfigData["Settings"]["RecordSize"]) { $RecordSize = [int]$ConfigData["Settings"]["RecordSize"] }
+    if ($ConfigData["Settings"]["HeaderMarker"]) { $HeaderMarker = [int]$ConfigData["Settings"]["HeaderMarker"] + 0x30 }
+    if ($ConfigData["Settings"]["DataMarker"]) { $DataMarker = [int]$ConfigData["Settings"]["DataMarker"] + 0x30 }
+}
+
+# ==================== 更新ルール設定 (INIから読込) ====================
+$ModifyRules = @()
+foreach ($key in $ConfigData.Keys) {
+    if ($key -like "Rule-*") {
+        $ModifyRules += @{
+            Name             = $ConfigData[$key]["Name"]
+            StartByte        = [int]$ConfigData[$key]["StartByte"]
+            PhoneLength      = [int]$ConfigData[$key]["PhoneLength"]
+            OldLeadingZeros  = [int]$ConfigData[$key]["OldLeadingZeros"]
+            OldTrailingZeros = [int]$ConfigData[$key]["OldTrailingZeros"]
+            NewLeadingZeros  = [int]$ConfigData[$key]["NewLeadingZeros"]
+            NewTrailingZeros = [int]$ConfigData[$key]["NewTrailingZeros"]
+        }
+    }
+}
+
+if ($ModifyRules.Count -eq 0) {
+    # デフォルト値
+    $ModifyRules = @(
+        @{ Name="Phone-1"; StartByte=100; PhoneLength=10; OldLeadingZeros=0; OldTrailingZeros=10; NewLeadingZeros=6; NewTrailingZeros=4 },
+        @{ Name="Phone-2"; StartByte=200; PhoneLength=10; OldLeadingZeros=0; OldTrailingZeros=10; NewLeadingZeros=6; NewTrailingZeros=4 }
+    )
+}
 
 # ==================== スクリプトロジック ====================
 $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
