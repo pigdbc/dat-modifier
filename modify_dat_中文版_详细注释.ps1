@@ -15,85 +15,44 @@ param(
 
 # ==================== 文件夹配置 ====================
 # 这些变量定义了输入、输出和日志文件的存放位置
-$InFolder  = "in"   # 输入文件夹：存放原始DAT文件
-$OutFolder = "out"  # 输出文件夹：存放修改后的DAT文件
-$LogFolder = "log"  # 日志文件夹：存放处理日志
-
-# ==================== 配置文件加载 ====================
-$ConfigFile = "config.ini"
-# 检查是否存在 config.ini，如果不存在则尝试加载 config_日本語.ini
-if (-not (Test-Path $ConfigFile)) {
-    $ConfigFile = "config_日本語.ini"
-    if (-not (Test-Path $ConfigFile)) {
-        Write-Host "警告: 未找到 config.ini 或 config_日本語.ini 文件，将使用默认配置。" -ForegroundColor Yellow
-        $ConfigFile = $null # 标记为未找到配置文件
-    }
-}
-
-# 定义一个函数来解析INI文件
-function Parse-IniFile {
-    param([string]$FilePath)
-    $ini = @{} # 初始化一个哈希表来存储INI内容
-    $section = "Global" # 默认节名
-    
-    # 如果文件不存在，则返回空哈希表
-    if (-not (Test-Path $FilePath)) { return $ini }
-    
-    # 读取文件内容，使用UTF8编码
-    Get-Content $FilePath -Encoding UTF8 | ForEach-Object {
-        $line = $_.Trim() # 移除行首尾空格
-        
-        # 跳过空行、注释行（以;或#开头）
-        if ([string]::IsNullOrWhiteSpace($line) -or $line.StartsWith(";") -or $line.StartsWith("#")) { return }
-        
-        # 匹配节头，例如 [SectionName]
-        if ($line -match "^\[(.*)\]$") {
-            $section = $matches[1] # 提取节名
-            $ini[$section] = @{} # 为新节创建一个新的哈希表
-        } 
-        # 匹配键值对，例如 Key=Value
-        elseif ($line -match "^(.*?)=(.*)$") {
-            $key = $matches[1].Trim() # 提取键名
-            $value = $matches[2].Trim() # 提取值
-            
-            # 如果当前节不存在，则创建它（以防文件格式不规范）
-            if (-not $ini.ContainsKey($section)) { $ini[$section] = @{} }
-            $ini[$section][$key] = $value # 将键值对添加到当前节
-        }
-    }
-    return $ini # 返回解析后的INI数据
-}
-
-# 加载配置文件
-$ConfigData = @{}
-if ($ConfigFile) {
-    $ConfigData = Parse-IniFile -FilePath $ConfigFile
-    if ($ConfigData.Count -gt 0) {
-        Write-Host "已加载配置文件: $ConfigFile" -ForegroundColor Green
-    } else {
-        Write-Host "警告: 配置文件 '$ConfigFile' 为空或解析失败，将使用默认配置。" -ForegroundColor Yellow
-    }
-}
+$BaseDir = $PSScriptRoot   # 脚本所在目录作为基础目录
+$InFolder = Join-Path $BaseDir "in"   # 输入文件夹：存放原始DAT文件
+$OutFolder = Join-Path $BaseDir "out"  # 输出文件夹：存放修改后的DAT文件
+$LogFolder = Join-Path $BaseDir "log"  # 日志文件夹：存放处理日志
 
 # ==================== 记录配置 ====================
-# 默认值
-$RecordSize   = 1300      # 每条记录的固定字节数（大端存储）
-$HeaderMarker = 0x31      # Header记录的首字节标识符（ASCII字符'1'的十六进制值）
-$DataMarker   = 0x32      # 数据记录的首字节标识符（ASCII字符'2'的十六进制值）
-$ZeroChar     = "0"       # 用于填充的0字符（BigEndianUnicode编码使用字符串）
+# 这些常量定义了DAT文件的结构特征
+$RecordSize = 1300     # 每条记录的固定字节数（大端存储）
+$HeaderMarker = 0x31     # Header记录的首字节标识符（ASCII字符'1'的十六进制值）
+$DataMarker = 0x32     # 数据记录的首字节标识符（ASCII字符'2'的十六进制值）
+$ZeroChar = '0'      # 用于填充的0字符（BigEndianUnicode编码使用字符串）
 
-# 从 INI 配置加载设置 (如果存在)
-if ($ConfigData.ContainsKey("Settings")) {
-    $settings = $ConfigData["Settings"]
-    if ($settings["RecordSize"]) { $RecordSize = [int]$settings["RecordSize"] }
-    # HeaderMarker 和 DataMarker 在INI中可能配置为字符 '1' 或 '2'，需要转换为十六进制ASCII值
-    if ($settings["HeaderMarker"]) { $HeaderMarker = [byte][char]$settings["HeaderMarker"] }
-    if ($settings["DataMarker"]) { $DataMarker = [byte][char]$settings["DataMarker"] }
-    if ($settings["ZeroChar"]) { $ZeroChar = $settings["ZeroChar"] }
-}
-
-# ==================== 修改规则配置 (从INI加载) ====================
+# ==================== 修改规则配置 ====================
 # 每条规则定义了一个需要修改的电话号码字段
+# 你可以通过复制规则块来添加更多字段
+$ModifyRules = @(
+    # 规则1：修改第100-119字节的电话号码
+    @{
+        Name             = "Phone-1"    # 规则名称（用于日志显示）
+        StartByte        = 100          # 字段起始位置（从1开始计数）
+        PhoneLength      = 10           # 电话号码本身的长度（字节数）
+        OldLeadingZeros  = 0            # 旧格式中电话号码前面的0的数量
+        OldTrailingZeros = 10           # 旧格式中电话号码后面的0的数量
+        NewLeadingZeros  = 6            # 新格式中电话号码前面的0的数量
+        NewTrailingZeros = 4            # 新格式中电话号码后面的0的数量
+    },
+    # 规则2：修改第200-219字节的电话号码
+    @{
+        Name             = "Phone-2"    # 规则名称
+        StartByte        = 200          # 字段起始位置（从1开始计数）
+        PhoneLength      = 10           # 电话号码长度
+        OldLeadingZeros  = 0            # 旧格式前置0数量
+        OldTrailingZeros = 10           # 旧格式后置0数量
+        NewLeadingZeros  = 6            # 新格式前置0数量
+        NewTrailingZeros = 4            # 新格式后置0数量
+    }
+    # 添加更多规则：只需复制上面的块并修改参数值
+    # @{
     #     Name             = "Phone-3"
     #     StartByte        = 300
     #     ...
@@ -107,14 +66,15 @@ if ($ConfigData.ContainsKey("Settings")) {
 $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
 
 # 构建完整的文件路径
-$InputFile  = Join-Path $InFolder $FileName                                   # 输入文件完整路径
+$InputFile = Join-Path $InFolder $FileName                                   # 输入文件完整路径
 $OutputFile = Join-Path $OutFolder $FileName                                  # 输出文件完整路径
-$LogFile    = Join-Path $LogFolder "$($FileName -replace '\.dat$','')_$timestamp.log"  # 日志文件路径
+$LogFile = Join-Path $LogFolder "$($FileName -replace '\.dat$','')_$timestamp.log"  # 日志文件路径
 
 # 确保输出文件夹和日志文件夹存在
 # 如果不存在则自动创建
 foreach ($folder in @($OutFolder, $LogFolder)) {
-    if (-not (Test-Path $folder)) {                           # 检查文件夹是否存在
+    if (-not (Test-Path $folder)) {
+        # 检查文件夹是否存在
         New-Item -ItemType Directory -Path $folder -Force | Out-Null  # 创建文件夹，-Force确保父目录也会被创建
     }
 }
@@ -241,7 +201,8 @@ try {
                 if ($isNewFormat) {
                     # 已经是新格式，无需修改
                     $changes += "  $($rule.Name): 没有变化"
-                } else {
+                }
+                else {
                     # ========== 执行格式转换 ==========
                     
                     # 计算电话号码在字段中的起始位置（BigEndianUnicode每字符2字节）
@@ -285,7 +246,8 @@ try {
             if ($hasChange) {
                 Log "[#$($recordNum.ToString().PadLeft(4))] 已修改"
                 $modifiedCount++  # 增加已修改计数
-            } else {
+            }
+            else {
                 Log "[#$($recordNum.ToString().PadLeft(4))] 无变化"
             }
             

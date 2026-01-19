@@ -8,14 +8,15 @@ param(
 )
 
 # ==================== 文件夹配置 ====================
-$InFolder  = "in"
-$OutFolder = "out"
-$LogFolder = "log"
+$BaseDir = $PSScriptRoot
+$InFolder = Join-Path $BaseDir "in"
+$OutFolder = Join-Path $BaseDir "out"
+$LogFolder = Join-Path $BaseDir "log"
 
 # ==================== 记录配置 ====================
 # ==================== 配置文件加载 ====================
-$ConfigFile = "config.ini"
-if (-not (Test-Path $ConfigFile)) { $ConfigFile = "config_日本語.ini" }
+$ConfigFile = Join-Path $BaseDir "config.ini"
+if (-not (Test-Path $ConfigFile)) { $ConfigFile = Join-Path $BaseDir "config_日本語.ini" }
 
 function Parse-IniFile {
     param([string]$FilePath)
@@ -29,7 +30,8 @@ function Parse-IniFile {
         if ($line -match "^\[(.*)\]$") {
             $section = $matches[1]
             $ini[$section] = @{}
-        } elseif ($line -match "^(.*?)=(.*)$") {
+        }
+        elseif ($line -match "^(.*?)=(.*)$") {
             $key = $matches[1].Trim()
             $value = $matches[2].Trim()
             if (-not $ini.ContainsKey($section)) { $ini[$section] = @{} }
@@ -43,10 +45,10 @@ $ConfigData = Parse-IniFile -FilePath $ConfigFile
 
 # ==================== 记录配置 ====================
 # 默认值
-$RecordSize   = 1300
+$RecordSize = 1300
 $HeaderMarker = 0x31
-$DataMarker   = 0x32
-$ZeroChar     = "0"
+$DataMarker = 0x32
+$ZeroChar = "0"
 
 # 从INI加载设置
 if ($ConfigData.ContainsKey("Settings")) {
@@ -74,16 +76,16 @@ foreach ($key in $ConfigData.Keys) {
 if ($ModifyRules.Count -eq 0) {
     # 默认值
     $ModifyRules = @(
-        @{ Name="Phone-1"; StartByte=100; PhoneLength=10; OldLeadingZeros=0; OldTrailingZeros=10; NewLeadingZeros=6; NewTrailingZeros=4 },
-        @{ Name="Phone-2"; StartByte=200; PhoneLength=10; OldLeadingZeros=0; OldTrailingZeros=10; NewLeadingZeros=6; NewTrailingZeros=4 }
+        @{ Name = "Phone-1"; StartByte = 100; PhoneLength = 10; OldLeadingZeros = 0; OldTrailingZeros = 10; NewLeadingZeros = 6; NewTrailingZeros = 4 },
+        @{ Name = "Phone-2"; StartByte = 200; PhoneLength = 10; OldLeadingZeros = 0; OldTrailingZeros = 10; NewLeadingZeros = 6; NewTrailingZeros = 4 }
     )
 }
 
 # ==================== 脚本逻辑 ====================
 $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
-$InputFile  = Join-Path $InFolder $FileName
+$InputFile = Join-Path $InFolder $FileName
 $OutputFile = Join-Path $OutFolder $FileName
-$LogFile    = Join-Path $LogFolder "$($FileName -replace '\.dat$','')_$timestamp.log"
+$LogFile = Join-Path $LogFolder "$($FileName -replace '\.dat$','')_$timestamp.log"
 
 foreach ($folder in @($OutFolder, $LogFolder)) {
     if (-not (Test-Path $folder)) { 
@@ -172,7 +174,8 @@ try {
                 
                 if ($isNewFormat) {
                     $changes += "  $($rule.Name): 没有变化"
-                } else {
+                }
+                else {
                     # 按旧格式提取电话号码 (BigEndianUnicode)
                     $phoneCharOffset = $fieldOffset + ($rule.OldLeadingZeros * 2)
                     $phoneByteLen = $rule.PhoneLength * 2
@@ -205,7 +208,8 @@ try {
             if ($hasChange) {
                 Log "[#$($recordNum.ToString().PadLeft(4))] MODIFIED"
                 $modifiedCount++
-            } else {
+            }
+            else {
                 Log "[#$($recordNum.ToString().PadLeft(4))] NO CHANGE"
             }
             foreach ($c in $changes) { Log $c }
