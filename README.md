@@ -13,11 +13,8 @@ DATファイル内の電話番号フィールドを一括修正するツール�
 ├── in/                          ← 输入文件夹 (放置原始DAT文件)
 ├── out/                         ← 输出文件夹 (自动生成)
 ├── log/                         ← 日志文件夹 (自动生成)
-├── config.ini                   ← 配置文件 (中文)
-├── config_日本語.ini            ← 配置文件 (日本語)
-├── modify_dat.py                ← Python脚本 (推荐)
-├── modify_dat_中文版.ps1        ← PowerShell脚本
-├── modify_dat_日文版.ps1        ← PowerShell脚本
+├── config.ini                   ← 配置文件
+├── modify_dat.ps1               ← PowerShell脚本
 └── README.md
 ```
 
@@ -25,20 +22,10 @@ DATファイル内の電話番号フィールドを一括修正するツール�
 
 ## 🚀 快速开始 / Quick Start
 
-### Python (推荐)
-
-```bash
-# 使用默认配置文件 config.ini
-python3 modify_dat.py data.dat
-
-# 使用日语配置文件
-python3 modify_dat.py data.dat config_日本語.ini
-```
-
 ### PowerShell (Windows)
 
 ```powershell
-.\modify_dat_中文版.ps1 -FileName "data.dat"
+.\modify_dat.ps1 -FileName "data.dat"
 ```
 
 ---
@@ -55,12 +42,12 @@ DataMarker = 2
 
 [Rule-1]
 Name = Phone-1
-StartByte = 100              # 起始位置 (1-indexed)
-PhoneLength = 10             # 电话号码长度
-OldLeadingZeros = 0          # 旧格式前置0数量
-OldTrailingZeros = 10        # 旧格式后置0数量
-NewLeadingZeros = 6          # 新格式前置0数量
-NewTrailingZeros = 4         # 新格式后置0数量
+StartByte = 100              # 起始字符位置 (1-indexed)
+PhoneLength = 10             # 电话号码长度(字符)
+OldLeadingZeros = 0          # 旧格式前置0字符数
+OldTrailingZeros = 10        # 旧格式后置0字符数
+NewLeadingZeros = 6          # 新格式前置0字符数
+NewTrailingZeros = 4         # 新格式后置0字符数
 
 [Rule-2]
 Name = Phone-2
@@ -77,6 +64,7 @@ NewTrailingZeros = 4
 ```
 旧格式: [1381234567][0000000000]  (电话号码 + 10个0)
 新格式: [000000][1381234567][0000]  (6个0 + 电话号码 + 4个0)
+注：配置值按字符填写（UTF-16BE 每字符 2 字节）
 ```
 
 ---
@@ -106,7 +94,6 @@ Summary: 3/4 records modified
 - ✅ **BigEndianUnicode** - 支持 UTF-16BE 编码
 - ✅ **流式读写** - 支持处理超大文件
 - ✅ **智能检测** - 自动识别已转换的记录
-- ✅ **多语言支持** - 中文、日本語配置文件
 
 ---
 

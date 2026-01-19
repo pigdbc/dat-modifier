@@ -1,26 +1,24 @@
 ╔══════════════════════════════════════════════════════════════╗
-║  DAT File Modifier v3 (FileStream)                           ║
+║  DAT File Modifier (FileStream) - 日本語版                   ║
 ╠══════════════════════════════════════════════════════════════╣
-║  Time: 2026-01-19 19:57:16                               ║
-║  Input:  /Users/jiwuqi/.gemini/antigravity/scratch/projects/3-dat-modifier/in/data.dat║
-║  Output: /Users/jiwuqi/.gemini/antigravity/scratch/projects/3-dat-modifier/out/data.dat║
+║  時刻: 2026-01-20 01:18:35                               ║
+║  入力:  /Users/jiwuqi/.gemini/antigravity/scratch/projects/3-dat-modifier/in/data.dat║
+║  出力: /Users/jiwuqi/.gemini/antigravity/scratch/projects/3-dat-modifier/out/data.dat║
+║  設定: /Users/jiwuqi/.gemini/antigravity/scratch/projects/3-dat-modifier/config.ini║
 ╚══════════════════════════════════════════════════════════════╝
 
-File Size: 5200 bytes
-Records: 4 | Rules: 2
+ファイルサイズ: 7800 バイト
+レコード数: 3 | ルール数: 2
 ────────────────────────────────────────────────────────────────
 
-[#   1] HEADER - Skipped
-[#   2] MODIFIED
+[#   1] ヘッダー - スキップ
+[#   2] 修正済み
   Phone-1: [13812345670000000000] → [00000013812345670000]
   Phone-2: [13912345670000000000] → [00000013912345670000]
-[#   3] MODIFIED
-  Phone-1: [13823456780000000000] → [00000013823456780000]
-  Phone-2: [13923456780000000000] → [00000013923456780000]
-[#   4] MODIFIED
-  Phone-1: [13834567890000000000] → [00000013834567890000]
-  Phone-2: [13934567890000000000] → [00000013934567890000]
+[#   3] 変更なし
+  Phone-1: 変更なし
+  Phone-2: 変更なし
 
 ────────────────────────────────────────────────────────────────
-Summary: Modified 3 / 4 records
+サマリー: 1 / 3 レコードを修正
 ────────────────────────────────────────────────────────────────
